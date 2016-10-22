@@ -1,0 +1,301 @@
+#!/bin/bash
+# sysinfo - Script que gera um arquivo com informações do computador.
+# Autor - Vinicius Dias - carlosv775@gmail.com
+
+##### Constantes
+TITLE="Informações de sistema de $HOSTNAME"
+RIGHT_NOW=$(date +"%A, %d/%m/%Y, %H:%M")
+TIME_STAMP="Atualizado em $RIGHT_NOW por $USER"
+
+##### Funções
+function usage
+{
+    echo
+    echo -e "\033[1m$0\033[0m - Script que gera um arquivo com informações do computador."
+    echo
+    echo -e "\033[1mUSO\033[0m\n\t$0 [opções] [parâmetro]"
+    echo
+    echo -e "\033[1mOPÇÕES\033[0m"
+    echo -e "\t\033[1m-f\033[0m [arq], \033[1m--file\033[0m [arq]"
+    echo -e "\t\tUtiliza [arq] como nome do arquivo de saída."
+    echo -e "\t\tCaso seja omitido, o nome padrão é info_sistema"
+    echo
+    echo -e "\t\033[1m-i\033[0m, \033[1m--interativo\033[0m"
+    echo -e "\t\tAtiva modo interativo, para perguntar ao usuário, caso o arquivo especificado já exista, se ele deseja ou não sobrescrevê-lo."
+    echo
+    echo -e "\t\033[1m-p\033[0m N, \033[1m--processos\033[0m N"
+    echo -e "\t\tExibe os primeiros N processos que mais consomem RAM."
+    echo -e "\t\tSe omitido, os 5 primeiros serão mostrados."
+    echo
+    echo -e "\t\033[1m-w\033[0m, \033[1m--web\033[0m"
+    echo -e "\t\tSalva um arquivo no formato html ao invés de texto."
+    echo
+    echo -e "\033[1mEXEMPLO\033[0m"
+    echo -e "\t\033[1m$0\033[0m -f ~/Documentos/sistema.html -i -p 7 -w"
+    echo
+    echo
+    echo -e "\033[1mINFORMAÇÃO EXTRA\033[0m"
+    echo -e "\tCaso rode o script como superusuário, algumas informações extra são dadas, como espaço do /home de cada usuário e detalhes de partições."
+    echo
+    echo -e "\033[1mAUTOR:\033[0m"
+    echo -e "\tCarlos Vinicius dos Santos Dias"
+    echo -e "\tcdias@faeterj-petropolis.edu.br"
+    echo
+}
+#fim usage
+
+function show_distro
+{
+    lsb_release -d | cut -f2
+}
+
+function show_uptime
+{
+    uptime
+}
+# fim show_uptime
+
+function show_logged_users
+{
+    who | cut -d" " -f1 | uniq | sort
+}
+# fim show_logged_users
+
+function drive_space
+{
+    df --si
+}
+# fim drive_space
+
+function home_space
+{
+    # Somente root consegue ver esta informação
+    if [ $(id -u) -eq 0 ]; then
+        du -hs /home/* | sort -nr
+    else
+        du -hs $HOME
+    fi
+}
+# fim home_space
+
+function disk_html
+{
+# Somente root consegue ver esta informação
+    if [ $(id -u) -eq 0 ]; then
+        echo "<h2>Partições e info extra sobre o HD</h2>"
+        echo "<pre>"
+        sudo fdisk -l
+        echo "</pre>"
+    fi
+}
+#fim disk_html
+
+function disk_txt
+{
+# Somente root consegue ver esta informação
+    if [ $(id -u) -eq 0 ]; then
+        echo "Partições e info extra sobre o HD"
+        sudo fdisk -l
+    fi
+}
+#fim disk_txt
+
+function avail_ram
+{
+    free -h
+}
+
+function process_ram
+{
+    ps aux | head -1
+    ps aux | sort -nr -k4 | head -$processos
+}
+#fim process_ram
+
+function cpu_info
+{
+# Somente root consegue ver esta informação
+    if [ $(id -u) -eq 0 ]; then
+        dmidecode --type processor | grep -i version | tr -d '\t'
+        dmidecode --type processor | grep -i "max speed" | tr -d '\t'
+        dmidecode --type processor | grep -i "current speed" | tr -d '\t'
+        dmidecode --type processor | grep -i "core enabled" | tr -d '\t'
+    else
+        cat /proc/cpuinfo | grep -i "model name" | uniq | cut -f2 -d:
+    fi
+}
+
+function pci_devices
+{
+    lspci
+}
+#pci_devices
+
+function usb_devices
+{
+    lsusb | grep -v "Linux Foundation"
+}
+#usb_devices
+
+function write_page
+{
+cat << EOF
+    <html>
+    <head>
+        <title>$TITLE</title>
+        <meta charset="utf-8" />
+        <style>
+            body {
+                font-family: FreeMono, serif;
+                background: black;
+                color: green;
+            }
+            h1, p { text-align: center; }
+        </style>
+    </head>
+    <body>
+        <h1>$TITLE</h1>
+        <p>$TIME_STAMP</p>
+        <h2>Sistema utilizado</h2>
+        <pre>$(show_distro)</pre>
+
+        <h2>Tempo "ligado" do sistema</h2>
+        <pre>$(show_uptime)</pre>
+
+        <h2>Usuários logados no sistema</h2>
+        <pre>$(show_logged_users)</pre>
+
+        <h2>Espaço do sistema de arquivos</h2>
+        <pre>$(drive_space)</pre>
+
+        <h2>Espaço do diretório /home por usuário</h2>
+        <pre>$(home_space)</pre>
+
+        $(disk_html)
+
+        <h2>Informações sobre a RAM e SWAP</h2>
+        <pre>$(avail_ram)</pre>
+
+        <h2>$processos processos que mais consomem RAM</h2>
+        <pre>$(process_ram)</pre>
+
+        <h2>Processador</h2>
+        <pre>$(cpu_info)</pre>
+
+        <h2>Dispositivos USB conectados</h2>
+        <pre>$(usb_devices)</pre>
+
+        <h2>Dispositivos PCI</h2>
+        <pre>$(pci_devices)</pre>
+    </body>
+    </html>
+EOF
+}
+
+function write_file
+{
+cat << EOF
+$TITLE
+$TIME_STAMP
+
+--------------------------------------
+
+Sistema utilizado
+$(show_distro)
+
+
+Tempo "ligado" do sistema
+$(show_uptime)
+
+
+Usuários logados no sistema
+$(show_logged_users)
+
+
+Espaço do sistema de arquivos
+$(drive_space)
+
+
+Espaço do diretório /home por usuário
+$(home_space)
+
+
+$(disk_txt)
+
+
+Informações sobre a RAM e SWAP
+$(avail_ram)
+
+
+$processos processos que mais consomem RAM
+$(process_ram)
+
+
+Processador
+$(cpu_info)
+
+
+Dispositivos USB conectados
+$(usb_devices)
+
+
+Dispositivos PCI
+$(pci_devices)
+
+EOF
+}
+
+##### Main
+
+interativo=""
+filename=./info_sistema
+processos=5
+tipo="txt"
+while [ -n "$1" ]; do
+    case $1 in
+        -f | --file )
+            shift
+            filename=$1
+            ;;
+        -i | --interativo )
+            interativo=1
+            ;;
+        -p | --processos )
+            shift
+            processos=$1
+            ;;
+        -h | --help )
+            clear
+            usage | more -d
+            exit
+            ;;
+        -w | --web )
+            tipo="html"
+            ;;
+        * )
+            echo -e "\aParâmetro inválido.\a"
+            sleep 1
+            usage | more -d
+            exit 1
+    esac
+    shift
+done
+# Verificar se -i ou --interativo foram passados, e verifica se o arquivo $filename já existe
+resposta="n"
+if [ "$interativo" = "1"  ]; then
+    while [[ -f $filename && ( $resposta != "s" && $resposta != "S" ) ]]; do
+        echo "O arquivo \"$filename\" já existe. Sobrescrever [s/n]?"
+        read resposta
+        if [ $resposta != "s" -a $resposta != "S" ]; then
+            echo "Digite o novo nome do arquivo: "
+            read filename
+        fi
+    done
+fi
+echo "Arquivo de saída = $filename"
+# Função para escrever no arquivo $filename
+if [ $tipo = "html" ]; then
+    write_page > $filename
+else
+    write_file > $filename
+fi

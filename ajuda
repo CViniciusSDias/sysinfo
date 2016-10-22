@@ -1,0 +1,28 @@
+./sysinfoGrafico
+    Script para exibir informações do computador
+
+USO
+    Digite o nome do script (por padrão sysinfoGrafico)
+    precedido de "./" (sem aspas).
+
+    Seu menu inicial é intuitivo e apresenta funções autoexplicativas.
+    Selecione a opção desejada, e aperte [ENTER].
+
+    As informações serão exibidas na tela.
+    Aperte [ENTER] novamente para voltar à tela inicial.
+
+    Caso queira que as informações sejam salvas em um arquivo,
+    utilize o script sysinfo (modo texto).
+    Este script te dará a opção de salvar
+    um arquivo em texto ou html, para futuras consultas.
+
+
+INFORMAÇÃO EXTRA
+    Caso rode o script como superusuário,
+    algumas informações extra são dadas,
+    como espaço do /home de cada usuário
+    e detalhes de partições.
+
+AUTOR
+    Carlos Vinicius dos Santos Dias
+    carlosv775@gmail.com

@@ -1,0 +1,217 @@
+#!/bin/bash
+# sysinfoGrafico - Script que exibe informações sobre o computador
+# Autor - Vinicius Dias - carlosv775@gmail.com
+
+##### Constantes
+TITLE="Informações de sistema de $HOSTNAME"
+RIGHT_NOW=$(date +"%A, %d/%m/%Y, %H:%M")
+processos=5
+
+function usage
+{
+    dialog --backtitle "$TITLE" --textbox ajuda 20 80
+    main
+}
+
+function mostra_distro
+{
+    dialog --backtitle "$TITLE" --title "Sistema Operacional" --msgbox "\n$(lsb_release -d | cut -f2)\n " 0 0
+    main
+}
+
+function mostra_uptime
+{
+    dialog --backtitle "$TITLE" --title "Tempo \"ligado\" do sistema" --msgbox "\n$(uptime)" 7 70
+    main
+}
+
+function usuarios_logados
+{
+    who | cut -d" " -f1 | uniq | sort | dialog --backtitle "$TITLE" --progressbox "Usuários logados no sistema" 10 35 && read
+    main
+}
+
+function espaco_hd
+{
+    df --si | dialog --backtitle "$TITLE" --progressbox "Espaço do sistema de arquivos e partições montadas" 15 70 && read
+    main
+}
+
+function espaco_home
+{
+    if [ $(id -u) -eq 0 ]; then
+        cmd=`du -hs /home/* | sort -nr`
+    else
+        if dialog --backtitle "$TITLE" --title "Deseja ser root (sudo)?" --yesno "Usuário root (com sudo) recebe informações da pasta /home de todos os usuários. Deseja ser root?" 0 0
+        then
+            cmd=`sudo du -hs /home/* | sort -nr`
+        else
+            cmd=`du -hs $HOME`
+        fi
+    fi
+    dialog --backtitle "$TITLE" --title "Espaço da pasta /home por usuário" --msgbox "\n$cmd\n " 0 0
+    main
+}
+
+function hd_info
+{
+    if [ $(id -u) -eq 0 ]; then
+        fdisk -l | dialog --backtitle "$TITLE" --progressbox "Partições e info extra sobre o HD" 25 80 && read
+    else
+        dialog --backtitle "$TITLE"\
+        --title "Você precisa ser root."\
+        --yesno "\nDeseja tornar-se root (sudo)?\n " 0 0\
+        && sudo clear\
+        && sudo fdisk -l | dialog --backtitle "$TITLE" --progressbox "Partições e info extra sobre o HD" 25 80 && read
+    fi
+    main
+}
+
+function ram_disp
+{
+    echo -e "\n$(free -h)" | dialog --backtitle "$TITLE" --progressbox "Informações sobre a RAM e SWAP" 10 100 && read
+    main
+}
+
+function nprocessos
+{
+    dialog --stdout --backtitle "$TITLE" --inputbox "Digite o número de processos a serem exibidos" 0 0 > arq.tmp
+    processos=$(cat arq.tmp)
+    rm -f arq.tmp
+    process_ram
+}
+
+function process_ram
+{
+    echo -e "\n$(ps aux | head -1)\n$(ps aux | sort -nr -k4 | head -$processos)" > arq.tmp
+    if [ $((processos + 7)) -gt 30 ]; then
+        proc=32
+    else
+        proc=$((processos + 7))
+    fi
+    dialog --backtitle "$TITLE" --title "$processos processos que mais consomem RAM" --textbox arq.tmp $proc 130
+    rm arq.tmp
+    main
+}
+
+function cpu_info
+{
+    echo -en "\n" > arq.tmp
+    if [ $(id -u) -eq 0 ]; then
+        dmidecode --type processor | grep -i "version" | tr -d '\t' >> arq.tmp
+        dmidecode --type processor | grep -i "max speed" | tr -d '\t' >> arq.tmp
+        dmidecode --type processor | grep -i "current speed" | tr -d '\t' >> arq.tmp
+        dmidecode --type processor | grep -i "core enabled" | tr -d '\t' >> arq.tmp
+    else
+        if dialog --stdout --backtitle "$TITLE" --title "Deseja ser root (sudo)?" --yesno "\nUsuário root (com sudo) recebe algumas informações a mais. Deseja ser root?\n" 0 0
+        then
+            sudo clear\
+            && sudo dmidecode --type processor | grep -i "version" | tr -d '\t' >> arq.tmp\
+            && sudo dmidecode --type processor | grep -i "max speed" | tr -d '\t' >> arq.tmp\
+            && sudo dmidecode --type processor | grep -i "current speed" | tr -d '\t' >> arq.tmp\
+            && sudo dmidecode --type processor | grep -i "core enabled" | tr -d '\t' >> arq.tmp
+        else
+            cat /proc/cpuinfo | grep -i "model name" | uniq | cut -f2 -d: >> arq.tmp
+        fi
+    fi
+    dialog --backtitle "$TITLE" --title "Processador" --textbox arq.tmp 0 0
+    rm -f arq.tmp
+    main
+}
+
+function pci
+{
+    echo -en "\n" > arq.tmp
+    lspci -v >> arq.tmp
+    dialog --backtitle "$TITLE" --title "Dispositivos PCI" --textbox arq.tmp 0 0
+    rm -f arq.tmp
+    main
+}
+
+function usb
+{
+    echo -en "\n" > arq.tmp
+    lsusb | grep -vi "linux foundation" >> arq.tmp
+    dialog --backtitle "$TITLE" --title "Dispositivos USB conectados" --textbox arq.tmp 0 0
+    rm -f arq.tmp
+    main
+}
+
+#main
+
+function main
+{
+    dialog --stdout --hfile "ajuda" \
+        --backtitle "$TITLE" --title "sysinfoGrafico" \
+        --menu "Escolha a informação a ser exibida" 19 70 13 \
+        1 "Sistema Operacional usado" \
+        2 "Há quanto tempo o PC está ligado" \
+        3 "Usuários logados no sistema" \
+        4 "Espaço do sistema de arquivos e partições montadas" \
+        5 "Espaço da pasta /home (por usuário)" \
+        6 "Partições e info extra sobre o HD" \
+        7 "Informações sobre RAM e SWAP"\
+        8 "Processos que mais consomem RAM"\
+        9 "Processador"\
+        10 "Dispositivos PCI"\
+        11 "Dispositivos USB conectados"\
+        12 "Ajuda"\
+        13 "Sair" > arq.tmp
+
+    opt=$(cat arq.tmp)
+    rm -f arq.tmp
+    case $opt in
+        1)
+            mostra_distro
+            ;;
+        2)
+            mostra_uptime
+            ;;
+        3)
+            usuarios_logados
+            ;;
+        4)
+            espaco_hd
+            ;;
+        5)
+            espaco_home
+            ;;
+        6)
+            hd_info
+            ;;
+        7)
+            ram_disp
+            ;;
+        8)
+            nprocessos
+            ;;
+        9)
+            cpu_info
+            ;;
+        10)
+            pci
+            ;;
+        11)
+            usb
+            ;;
+        12)
+            usage
+            ;;
+        13)
+            rm -f arq.tmp
+			clear
+            exit 0
+            ;;
+        *)
+            rm -f arq.tmp
+            exit 1
+            ;;
+    esac
+    rm -f arq.tmp
+}
+
+if [ $(which dialog) ]; then
+    main
+else
+    echo "Para executar este script, o software 'dialog' precisa estar instalado."
+fi
